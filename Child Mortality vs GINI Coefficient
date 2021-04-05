@@ -1,0 +1,578 @@
+rm(list = ls())
+setwd("~/PUBL0055")
+library(foreign)
+library(texreg)
+library(lmtest)
+library(plm)
+library(sandwich)
+
+vdem <- read.csv("https://uclspp.github.io/datasets/data/vdem.csv")
+
+#Check for correlation between explanatory variables
+cor(vdem[, c("life_expectancy", "child_mortality","government_effectiveness",
+"inequality_gini","international_war","inflation",
+"healthcare","political_stability","media_censorship","polity","internet_access", "womens_civ_lib",
+"education15", "gdp_per_cap", "log_population", "civil_war","radio_television_per_cap",
+"urban_population_pct", "government_effectiveness","oil_production_per_cap")])
+
+#Model 1 Residuals
+model1 <- lm(child_mortality ~ inequality_gini, data=vdem)
+screenreg(model1)
+vdem$residuals <- residuals(model1)
+plot(
+residuals ~ inequality_gini, data = vdem,
+main = "Figure I: Residuals and Inequality",
+xlab = "Income Inequality (GINI Coefficient)",
+ylab = "Residuals",
+pch = 20,
+frame.plot = FALSE,
+col = "aquamarine3"
+)
+abline(h = 0)
+
+#Check for heteroskedasticity in model1
+bptest(model1)
+
+#Correct for heteroskedasticity in model1
+model1_robust <- coeftest(model1, vcov = vcovHC(model1))
+screenreg(coeftest(model1, vcov = vcovHC(model1)))
+corrected_errors <- coeftest(model1, vcov = vcovHC(model1))
+screenreg(
+model1,
+override.se = corrected_errors[, 2],
+override.pval = corrected_errors[, 4]
+)
+#Check for non-linearity in model1
+quadratic.model <- lm(
+log(child_mortality) ~ log(inequality_gini),
+data = vdem
+)
+screenreg(
+list(model1, quadratic.model),
+custom.model.names = c("Linear model", "Transformed model")
+)
+
+#Model2
+#Backward elimination for model selection
+model_selection <-lm(
+child_mortality ~ inequality_gini + life_expectancy + gdp_per_cap + education15 +
+political_stability + healthcare + media_censorship,
+data = vdem
+)
+summary(model_selection)
+screenreg(list(model1, model_selection))
+
+#Residuals plots for all independent variables
+linear_model <- lm(child_mortality ~ inequality_gini + life_expectancy + gdp_per_cap +
+education15 + political_stability + healthcare + media_censorship, data = vdem)
+screenreg(linear_model)
+vdem$residuals <- residuals(linear_model)
+plot(
+residuals ~ inequality_gini, data = vdem,
+xlab = "inequality_gini",
+ylab = "Residuals",
+main = "Residuals and GINI coefficient",
+pch = 20,
+frame.plot = FALSE,
+col = "aquamarine3"
+)
+abline(h = 0)
+plot(
+residuals ~ gdp_per_cap, data = vdem,
+xlab = "gdp_per_cap",
+ylab = "Residuals",
+main = "Figure II: Residuals and GDP per Capita",
+pch = 20,
+frame.plot = FALSE,
+col = "aquamarine3"
+)
+abline(h = 0)
+plot(
+residuals ~ life_expectancy, data = vdem,
+xlab = "life_expectancy",
+ylab = "Residuals",
+xlim = c(40,85),
+main = "Residuals and Life Expectancy",
+pch = 20,
+frame.plot = FALSE,
+col = "aquamarine3"
+)
+abline(h = 0)
+plot(
+residuals ~ education15, data = vdem,
+xlab = "education15",
+ylab = "Residuals",
+main = "Figure III: Residuals and Average Years of Education (Citizens 15+)",
+pch = 20,
+frame.plot = FALSE,
+col = "aquamarine3"
+)
+abline(h = 0)
+plot(
+residuals ~ political_stability, data = vdem,
+xlab = "political_stability",
+ylab = "Residuals",
+main = "Residuals and Political Stability",
+pch = 20,
+frame.plot = FALSE,
+col = "aquamarine3"
+)
+abline(h = 0)
+plot(
+residuals ~ healthcare, data = vdem,
+xlab = "healthcare",
+ylab = "Residuals",
+main = "Residuals and Quality Healthcare",
+pch = 20,
+frame.plot = FALSE,
+col = "aquamarine3"
+)
+abline(h = 0)
+
+plot(
+residuals ~ media_censorship, data = vdem,
+xlab = "media_censorship",
+ylab = "Residuals",
+main = "Residuals and Media Censorship",
+pch = 20,
+frame.plot = FALSE,
+col = "aquamarine3"
+)
+abline(h = 0)
+
+#Log transform GDP per capita
+log.model <- lm(child_mortality ~ log(gdp_per_cap) + education15 + healthcare +
+media_censorship + life_expectancy + political_stability + inequality_gini, data = vdem)
+screenreg(log.model)
+#Check residuals of logged GDP per capita
+plot(
+residuals ~ log(gdp_per_cap), data = vdem,
+xlab = "logged GDP per capita",
+ylab = "Residuals",
+main = "Residuals and Logged GDP per Capita",
+pch = 20,
+frame.plot = FALSE,
+col = "aquamarine3"
+)
+abline(h = 0)
+
+#Poly transform education15
+poly.model <- lm(child_mortality ~ poly(education15,2), data = vdem)
+screenreg(poly.model)
+#Calculate first differences (2 predictions, when education15=10 and another when
+education15=13)
+y_hat1 <- predict(poly.model, newdata = data.frame(education15 = 10))
+y_hat1
+y_hat2 <- predict(poly.model, newdata = data.frame(education15 = 13))
+y_hat2
+y_hat2 - y_hat1
+
+#Calculate first differences (2 predictions, when education15=3 and another when education15=6)
+y_hat1 <- predict(poly.model, newdata = data.frame(education15 = 3))
+y_hat1
+y_hat2 <- predict(poly.model, newdata = data.frame(education15 = 6))
+y_hat2
+y_hat2 - y_hat1
+#check model with poly and log
+nonlinear_model <- lm(
+child_mortality ~ healthcare + poly(education15,2) + log(gdp_per_cap) + media_censorship +
+life_expectancy + political_stability + inequality_gini,
+data = vdem
+)
+screenreg(nonlinear_model)
+
+#Final Model 2 (to be used)
+model2 <-lm(
+child_mortality ~ inequality_gini + poly(education15,2) + life_expectancy + log(gdp_per_cap) +
+political_stability + healthcare + media_censorship + political_stability + inequality_gini,
+data = vdem
+)
+screenreg(model2)
+
+##Check for heteroskedasticity in model 2
+bptest(model2)
+
+##Correct for heteroskedasticity in model 2
+model2_robust <- coeftest(model2, vcov = vcovHC(model2))
+screenreg(coeftest(model2, vcov = vcovHC(model2)))
+corrected_errors <- coeftest(model2, vcov = vcovHC(model2))
+screenreg(list(quadratic.model,model_selection,model2, model2_robust))
+custom.model.names = c("Model 1", "Model 2 (Preliminary)", "Model 2", "Model 2 (Robust)")
+
+# Part 2 2)
+
+#State fixed effects
+model2_unit_effects <- plm(
+child_mortality ~ inequality_gini + poly(education15,2) + healthcare + political_stability +
+media_censorship + log(gdp_per_cap) + life_expectancy,
+data = vdem,
+index = c("country_name", "year"),
+effect = "individual"
+)
+screenreg(model2_unit_effects)
+plmtest(model2_unit_effects, effect="individual")
+#Time fixed effects
+model2_time_effects <- plm(
+child_mortality ~ inequality_gini + poly(education15,2) + healthcare + political_stability +
+media_censorship + log(gdp_per_cap) + life_expectancy,
+data = vdem,
+index = c("country_name", "year"),
+effect = "time"
+
+)
+summary(model2_time_effects)
+plmtest(model2_time_effects, effect="time")
+
+#Twoway effects
+model2_twoway_effects <- plm(
+child_mortality ~ inequality_gini + poly(education15,2) + healthcare + political_stability +
+media_censorship + log(gdp_per_cap) + life_expectancy,
+data = vdem,
+index = c("country_name", "year"),
+effect = "twoways"
+)
+summary(model2_twoway_effects)
+plmtest(model2_twoway_effects)
+
+#Summary of the 3 fixed models
+screenreg(
+list(model2_unit_effects, model2_time_effects, model2_twoway_effects ),
+custom.model.names = c("Country Fixed Effects", "Time Fixed Effects", "Twoway Fixed
+Effects" )
+)
+#Test for serial correlation
+pbgtest(model2_twoway_effects)
+
+#Correct for serial correlation
+model2_twoway_effects_hac <- coeftest(
+model2_twoway_effects,
+vcov = vcovHC(model2_twoway_effects, method = "arellano", type = "HC3")
+)
+screenreg(
+list(model2_twoway_effects, model2_twoway_effects_hac),
+custom.model.names = c("Twoway Fixed Effects", "Twoway Fixed Effects (HAC)")
+)
+#Test for Cross Sectional Dependence
+pcdtest(model2_twoway_effects)
+
+#Correct Cross Sectional Dependence with SCC
+model2_twoway_effects_scc <- coeftest(
+model2_twoway_effects,
+vcov = vcovSCC(model2_twoway_effects, type="HC3", cluster = "group")
+)
+model2_twoway_effects_scc
+screenreg(
+list(model2_twoway_effects, model2_twoway_effects_scc),
+
+custom.model.names = c("Twoway Fixed Effects", "Twoway Fixed Effects (SCC)")
+)
+#Relative effect of each variables
+model2_twoway_effects_scc[,1] / diff(range(vdem$child_mortality, na.rm = TRUE))
+
+#Compare HAC and spatially robust standard errors with the twoway model
+screenreg(
+list(model2_twoway_effects, model2_twoway_effects_hac, model2_twoway_effects_scc),
+custom.model.names = c("Twoway", "Twoway (HAC)", "Twoway (SCC)")
+)
+
+#Format in a Publishable Table
+screenreg(list(model2_unit_effects,model2_time_effects, model2_twoway_effects,
+model2_twoway_effects_hac, model2_twoway_effects_scc),
+custom.model.names = c("Country Effects",
+"Time Effects",
+"Twoway Effects",
+"Twoway (HAC)",
+"Twoway (SCC) »))
+
+#Part 3
+
+#1)
+rm(list = ls())
+setwd("~/PUBL0055")
+library(texreg)
+ess <- read.csv("https://uclspp.github.io/datasets/data/ess.csv")
+
+#Check correlation between variables
+cor(ess[, c("leave", "income", "years_education", "age", "unemployed")])
+
+#Build logistic model 1
+logit_model <- glm(
+leave ~ age + climate_change + income + years_education + country_attach,
+data = ess,
+family = binomial(link = "logit")
+)
+screenreg(logit_model)
+
+#Calculate predicted probabilities to leave for those with an income above the median across the
+whole education range
+edu_range <- seq(min(ess$years_education, na.rm = TRUE), max(ess$years_education, na.rm =
+TRUE),length.out = 100)
+income_above <- data.frame(
+income = 1,
+country_attach = median(ess$country_attach, na.rm = TRUE),
+years_education = edu_range,
+climate_change = median(ess$climate_change, na.rm = TRUE),
+age = mean(ess$age, na.rm = TRUE)
+
+)
+income_above$pps <- predict(
+logit_model,
+newdata = income_above,
+type = "response"
+)
+
+#calculate predicted probabilities to leave for those with an income below the median
+income_below <- data.frame(
+income = 0,
+country_attach = median(ess$country_attach, na.rm = TRUE),
+years_education = edu_range,
+climate_change = median(ess$climate_change, na.rm = TRUE),
+age = mean(ess$age, na.rm = TRUE)
+)
+income_below$pps <- predict(
+logit_model,
+newdata = income_below,
+type = "response"
+)
+
+# Set the values for pps
+pps <- data.frame(
+income = seq(from = 0, to = 1, by = 1),
+country_attach = median(ess$country_attach, na.rm = TRUE),
+years_education = edu_range,
+climate_change = median(ess$climate_change, na.rm = TRUE),
+age = mean(ess$age, na.rm = TRUE)
+)
+head(pps)
+
+#plot predicted probabilities
+plot(
+pps ~ years_education,
+data = income_above,
+type = "l",
+ylim = c(0,1),
+frame.plot = FALSE,
+main = "Figure IV: Effects of Income and Years of Education on Leave-Vote",
+xlab = "Education of 15+ Citizens",
+ylab = "Predicted Probability of Leave-Vote"
+)
+abline(h=.5, lty = "dashed", col = "DarkGrey")
+text(x = 1, y= .5, pos = 1, "p = 0.5")
+lines(pps ~ years_education, data = income_below, col = "red")
+range(income_above$pps)
+range(income_below$pps)
+
+
+#confusion
+pps <- predict(logit_model, newdata = ess, type = "response")
+evs <- ifelse(pps > 0.5, yes = 1, no = 0)
+confusion <- table(actual = ess$leave, expected.value = evs)
+confusion
+sum(diag(confusion)) / sum(confusion)
+#naive guess
+mean(ess$leave)
+
+#Other predicted probability graphs
+logit_model_ <- glm(
+leave ~ age + climate_change + income + years_education + country_attach,
+data = ess,
+family = binomial(link = "logit")
+)
+screenreg(logit_model_)
+
+#predicted probabilities to leave for those with an income above the median, across the whole range
+of country attach
+attach_range <- seq(min(ess$country_attach, na.rm = TRUE), max(ess$country_attach, na.rm =
+TRUE),length.out = 100)
+income_above2 <- data.frame(
+income = 1,
+country_attach = attach_range,
+years_education = mean(ess$years_education),
+climate_change = median(ess$climate_change),
+age = mean(ess$age)
+)
+income_above2$pps <- predict(
+logit_model_,
+newdata = income_above2,
+type = "response"
+)
+
+#calculate predicted probabilities for those with an income below the median
+income_below2 <- data.frame(
+income = 0,
+country_attach = attach_range,
+years_education = mean(ess$years_education),
+climate_change = median(ess$climate_change),
+age = mean(ess$age)
+)
+
+income_below2$pps <- predict(
+logit_model_,
+newdata = income_below2,
+type = "response"
+)
+
+# Set the values for pps
+pps <- data.frame(
+income = seq(from = 0, to = 1, by = 1),
+country_attach = attach_range,
+years_education = mean(ess$years_education, na.rm = TRUE),
+climate_change = median(ess$climate_change, na.rm = TRUE),
+age = mean(ess$age)
+)
+head(pps)
+
+
+#plot predicted probabilities
+plot(
+pps ~ country_attach,
+data = income_above2,
+type = "l",
+ylim = c(0,1),
+frame.plot = FALSE,
+main = "Figure V: Effects of Income and Country Attachment on Leave-Vote",
+xlab = "Emotional Attachment to Respondent's Country",
+ylab = "Predicted Probability of Leave-Vote"
+)
+abline(h=.5, lty = "dashed", col = "DarkGrey")
+text(x = 1, y= .5, pos = 1, "p = 0.5")
+lines(pps ~ country_attach, data = income_below2, col = "red")
+range(income_above2$pps)
+range(income_below2$pps)
+
+
+#confusion
+pps <- predict(logit_model_, newdata = ess, type = "response")
+evs <- ifelse(pps > 0.5, yes = 1, no = 0)
+confusion <- table(actual = ess$leave, expected.value = evs)
+confusion
+sum(diag(confusion)) / sum(confusion)
+
+# add immig_econ and immig_culture to my model
+logit_model2 <- glm(
+leave ~ age + climate_change + income + country_attach + years_education + immig_culture +
+immig_econ,
+data = ess,
+family = binomial(link = "logit")
+)
+screenreg(list(logit_model, logit_model2))
+custom.model.names = c("Logit Model I", "Logit Model II")
+
+#Confusion 1
+pps <- predict(logit_model2, newdata = ess, type = "response")
+evs <- ifelse(pps > 0.5, yes = 1, no = 0)
+confusion <- table(actual = ess$leave, expected.value = evs)
+sum(diag(confusion)) / sum(confusion)
+
+#Predicted probabilities for effects of leave vote across the whole range of immig_econ for income
+above median
+ecn_range <- seq(min(ess$immig_econ), max(ess$immig_econ),length.out = 100)
+income_up <- data.frame(
+income = 1,
+country_attach = median(ess$country_attach),
+years_education = mean(ess$years_education),
+climate_change = median(ess$climate_change),
+age = mean(ess$age),
+immig_culture = median(ess$immig_culture),
+immig_econ = ecn_range
+)
+income_up$pps <- predict(
+logit_model2,
+newdata = income_up,
+type = "response"
+)
+
+#Predicted probabilities across the whole range of effects of the immig_econ for income below
+median
+income_down <- data.frame(
+income = 0,
+country_attach = median(ess$country_attach),
+years_education = mean(ess$years_education),
+climate_change = median(ess$climate_change),
+age = mean(ess$age),
+immig_culture = median(ess$immig_culture),
+immig_econ = ecn_range
+)
+income_down$pps <- predict(
+logit_model2,
+newdata = income_down,
+type = "response"
+)
+
+#plot probabilities
+plot(
+pps ~ immig_econ,
+data = income_up,
+type = "l",
+ylim = c(0,1),
+frame.plot = FALSE,
+main = "Figure VI: Effects of Income and Views of Economic Effects of Immigration on Leave-
+Vote",
+xlab = "Self-Reported View of Economic Effects of Immigration in Their Country ",
+ylab = "Predicted Probability of Leave-Vote"
+)
+abline(h=.5, lty = "dashed", col = "DarkGrey")
+text(x = 0.9, y= .5, pos = 1, "p = 0.5")
+lines( pps ~ immig_econ, data = income_down, col = "red")
+range(income_up$pps)
+range(income_down$pps)
+
+#Predicted probabilities across the whole range of effects of the immig_culture and for income
+above median
+culture_range <- seq(min(ess$immig_culture), max(ess$immig_culture),length.out = 100)
+income_up <- data.frame(
+income = 1,
+country_attach = median(ess$country_attach),
+years_education = mean(ess$years_education),
+climate_change = median(ess$climate_change),
+age = mean(ess$age),
+immig_culture = culture_range,
+immig_econ = median(ess$immig_econ)
+)
+income_up$pps <- predict(
+logit_model2,
+newdata = income_up,
+type = "response"
+)
+
+#Predicted probabilities across the whole range of effects of the immig_culture for income above
+median
+income_down <- data.frame(
+income = 0,
+country_attach = median(ess$country_attach),
+years_education = mean(ess$years_education),
+climate_change = median(ess$climate_change),
+age = mean(ess$age),
+immig_culture = culture_range,
+immig_econ = median(ess$immig_econ)
+)
+income_down$pps <- predict(
+logit_model2,
+newdata = income_down,
+type = "response"
+)
+
+#plot probabilities
+plot(
+pps ~ immig_culture,
+data = income_up,
+type = "l",
+ylim = c(0,1),
+frame.plot = FALSE,
+main = "Figure VII: Effects of Income and Views of Cultural Effects of Immigration on Leave-
+Vote",
+xlab = "Self-Reported View of Cultural Effects of immigration in Their Country",
+ylab = "Predicted Probability of Leave-Vote"
+)
+abline(h=.5, lty = "dashed", col = "DarkGrey")
+text(x = 0.9, y= .5, pos = 1, "p = 0.5")
+lines( pps ~ immig_culture, data = income_down, col = "red")
+range(income_up$pps)
+range(income_down$pps)
+
+#confusion 2
+pps2 <- predict(logit_model2, newdata = ess, type = "response")
+evs2 <- ifelse(pps2 > 0.5, yes = 1, no = 0)
+confusion2 <- table(actual = ess$leave, expected.value = evs2)
+confusion2
+sum(diag(confusion2)) / sum(confusion2)
